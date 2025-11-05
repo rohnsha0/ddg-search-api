@@ -6,20 +6,13 @@ from openai import OpenAI
 from pydantic import BaseModel
 from typing import List, Optional
 import os
-from dotenv import load_dotenv
 from validation import ValidateURLs
-
-# Load environment variables
-load_dotenv()
 
 app = FastAPI(
     title="Lead Management API",
     description="FastAPI server for lead management with restricted access",
     version="1.0.0"
 )
-
-# Initialize OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Configure CORS to allow only https://n8n.sesai.in
 app.add_middleware(
@@ -63,7 +56,7 @@ async def verify_origin(request: Request, call_next):
     return response
 
 
-@app.get("/api/search")
+@app.get("/api/searchr")
 async def search_links(query: str, max_results: int = 25, timelimit: str = 'y'):
     """
     Search for links using DuckDuckGo and return all hrefs.
@@ -90,7 +83,7 @@ async def search_links(query: str, max_results: int = 25, timelimit: str = 'y'):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/validate")
-async def validate_api(summary: str, pp_scope: str, query: str, max_results: int, access_token: str):
+async def validate_api(summary: str, pp_scope: str, max_results: int, access_token: str):
     validator = ValidateURLs(
         access_token=access_token,
         insight=summary,
