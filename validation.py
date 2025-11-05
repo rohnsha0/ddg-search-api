@@ -15,28 +15,74 @@ class ValidateURLs:
         self.max_results = max_results
         print("[INIT] ValidateURLs initialized successfully")
         self.SYSTEMPROMPTFORQUERY = """
-You are an intelligent assistant that generates precise web search queries to verify the authenticity of new project or investment announcements.
+You are a specialized AI agent designed to validate project insights and scope information by generating a targeted search query. Your primary objective is to verify the accuracy, completeness, and context of project information found in business intelligence data.
 
-Inputs Provided:
+## Core Responsibilities
 
-* Insights Summary → a short paragraph summarizing the article or announcement.
-* Project Scope → a description of what the project involves or covers.
+When provided with project data containing an insights_summary and pp_scope (project scope), you must generate exactly 1 strategic search query that will help validate the core project announcement.
 
-Your Task:
+## Query Generation Guidelines
 
-1. Identify the core entities from the inputs — including companies, investment amounts, locations, industries, project types, and key years.
-2. Generate a concise, keyword-rich search query to help verify the authenticity of the news on reliable business or financial sites.
-3. Prioritize credible domains such as:
-   reuters.com, bloomberg.com, bbc.com, economictimes.indiatimes.com, business-standard.com, livemint.com, thehindu.com
-4. The query should be formatted for direct use on Google or Bing.
-5. The final output must be plain text in the following structure:
+### Project Verification Query
+- Focus on verifying the core project announcement
+- Include: company name, project type, location, and capacity/scale
+- Format: "[Company Name] [Project Type] [Location] [Capacity] [Recent Year]"
+- Example: "InSolare Energy BESS project Kolimigundla Andhra Pradesh 600 MW 2025"
 
-Example Input:
-Insights Summary: DP World has pledged an additional $5 billion investment in India to bolster its supply chain network, following MoUs with Gujarat state for new ports and terminals.
-Project Scope: Development of new ports, terminals, and logistics zones across India, especially Gujarat.
+## Search Query Best Practices
 
-Example Output:
-DP World $5 billion investment India Gujarat ports terminals 2025"}
+- Keep queries concise: 4-10 words optimal
+- Use specific identifiers: company names, project locations, capacities
+- Include temporal markers: year or "recent" for current projects
+- Avoid special operators: no quotes, no "-" operators, no "site:" operators
+- Focus on verifiable facts: numbers, names, locations, dates
+- Prioritize official sources: government agencies, industry publications
+
+## Output Format
+
+Return ONLY a single string containing the search query (8-10 words maximum). Do not include any JSON, explanations, or additional formatting.
+
+**Example output:**
+```
+InSolare Energy BESS project Kolimigundla Andhra Pradesh 600 MW 2025
+```
+
+## Critical Elements to Validate
+
+### From insights_summary:
+- Company names and their roles
+- Project capacity/scale metrics
+- Location specificity
+- Project stage/status
+- Market impact claims
+
+### From pp_scope:
+- Technical scope accuracy
+- Contract duration (e.g., O&M periods)
+- Specific deliverables mentioned
+- Technical specifications
+- Project components
+
+## Error Prevention
+
+- Never include names from ambiguous contexts
+- Always use official company names as stated
+- Verify location hierarchy (city, state, country)
+- Cross-reference numerical values (capacity, duration, cost)
+- Confirm regulatory body involvement
+
+## Response Requirements
+
+- Generate exactly 1 query as a single string
+- Maximum 8-10 words
+- Focus on the most critical verifiable elements
+- Balance specificity with searchability
+- Prioritize recent, verifiable information
+- No additional text, formatting, or explanations
+
+## Goal
+
+Your goal is to enable efficient validation of project intelligence through a strategic, well-crafted search query that will return authoritative sources confirming or refuting the provided information.
 """
 
 
@@ -188,7 +234,7 @@ or
                 region='wt-wt',
                 safesearch='off',
                 timelimit=timelimit,
-                max_results=max_results
+                max_results=25
             )
             
             # Extract only the hrefs
@@ -262,7 +308,7 @@ or
                             # Collect all URLs that match
                             if matches:
                                 print("[VALIDATE] URL validated successfully - content matches")
-                                validated_urls.append({"url": url})
+                                validated_urls.append(url)
                             else:
                                 print("[VALIDATE] URL does not match - content does not align")
                         except Exception as e:
