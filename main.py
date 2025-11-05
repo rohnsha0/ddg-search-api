@@ -82,6 +82,13 @@ async def search_links(query: str, max_results: int = 25, timelimit: str = 'y'):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/health")
+async def health_check():
+    """
+    Health check endpoint to verify that the server is running.
+    """
+    return {"status": "ok", "message": "Server is running", "version": "1.0.0"}
+
 @app.get("/api/validate")
 async def validate_api(summary: str, pp_scope: str, max_results: int, access_token: str):
     validator = ValidateURLs(
