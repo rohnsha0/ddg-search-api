@@ -2,6 +2,15 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from ddgs import DDGS
+from openai import OpenAI
+from pydantic import BaseModel
+from typing import List, Optional
+import os
+from dotenv import load_dotenv
+from validation import ValidateURLs
+
+# Load environment variables
+load_dotenv()
 
 app = FastAPI(
     title="Lead Management API",
@@ -9,10 +18,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 # Configure CORS to allow only https://n8n.sesai.in
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://n8n.sesai.in", "http://127.0.0.1:8000"],
+    allow_origins=["https://n8n.sesai.in", "http://127.0.0.1:8000", "https://n8n.thelinkai.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -29,7 +41,7 @@ async def verify_origin(request: Request, call_next):
     origin = request.headers.get("origin")
     referer = request.headers.get("referer")
     
-    allowed_origins = ["https://n8n.sesai.in", "http://127.0.0.1:8000"]
+    allowed_origins = ["https://n8n.sesai.in", "http://127.0.0.1:8000", "https://n8n.thelinkai.com"]
     
     # Allow requests without origin/referer for direct API access (like Postman during development)
     # Comment out the following lines in production if you want strict enforcement
@@ -76,3 +88,13 @@ async def search_links(query: str, max_results: int = 25, timelimit: str = 'y'):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/validate")
+async def validate_api(summary: str, pp_scope: str, query: str, max_results: int, access_token: str):
+    validator = ValidateURLs(
+        access_token=access_token,
+        insight=summary,
+        pp_scope=pp_scope,
+        max_results=max_results
+    )
+    return {"validated_urls": validator.validate()}
