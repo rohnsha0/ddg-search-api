@@ -6,7 +6,9 @@ from bs4 import BeautifulSoup
 
 
 class ValidateURLs:
-    def __init__(self, access_token: str, insight: str, pp_scope: str, max_results: int):
+    def __init__(
+        self, access_token: str, insight: str, pp_scope: str, max_results: int
+    ):
         print("[INIT] Initializing ValidateURLs class...")
         self.access = access_token
         self.client = OpenAI(api_key=access_token)
@@ -85,8 +87,7 @@ InSolare Energy BESS project Kolimigundla Andhra Pradesh 600 MW 2025
 Your goal is to enable efficient validation of project intelligence through a strategic, well-crafted search query that will return authoritative sources confirming or refuting the provided information.
 """
 
-
-        self.SYSTEMPROMPTVALIDATOR= """
+        self.SYSTEMPROMPTVALIDATOR = """
 You are a flexible content verification agent. Your task is to verify whether website HTML content aligns with the provided article insights and project scope based on overall meaning and intent.
 
 ## Input Format
@@ -224,40 +225,42 @@ or
         ]
         print(f"[QUERY-GEN] Generated {len(queries)} search queries: {queries}")
         return queries
-    
 
-    def search_links(self, query: str, max_results: int, timelimit: str = 'y'):
-        print(f"[SEARCH] Searching for query: '{query}' (max_results={max_results}, timelimit={timelimit})")
+    def search_links(self, query: str, max_results: int, timelimit: str = "y"):
+        print(
+            f"[SEARCH] Searching for query: '{query}' (max_results={max_results}, timelimit={timelimit})"
+        )
         try:
             results = DDGS().text(
                 query,
-                region='wt-wt',
-                safesearch='off',
+                region="wt-wt",
+                safesearch="off",
                 timelimit=timelimit,
-                max_results=40
+                max_results=50,
             )
-            
-            # Extract only the hrefs
-            links = [result['href'] for result in results]
-            print(f"[SEARCH] Found {len(links)} links for query: '{query}'")
+
+            # Extract only the hrefs and filter out wikipedia.com
+            links = [
+                result["href"]
+                for result in results
+                if "wikipedia.com" not in result["href"]
+            ]
             print(f"[SEARCH] Links: {links}")
-            
+
             return {
                 "success": True,
                 "query": query,
                 "total_results": len(links),
-                "links": links
+                "links": links,
             }
         except Exception as e:
             print(f"[SEARCH] Error during search: {str(e)}")
-            return {
-                "errored": str(e)
-            }
+            return {"errored": str(e)}
 
     def validateHTML(self, content: str):
         print("[VALIDATE] Validating HTML content...")
         print(f"[VALIDATE] HTML content length: {len(content)} characters")
-        
+
         response = self.client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[
@@ -281,47 +284,61 @@ or
 
     def validate(self):
         print("[VALIDATE] Starting validation process'")
-        validated_urls= []
-        unvalidated_links= []
+        validated_urls = []
+        unvalidated_links = []
 
         queries = self.generateSearchQueries()
         print(f"[VALIDATE] Processing {len(queries)} generated queries...")
-        
+
         for idx, query in enumerate(queries, 1):
             print(f"\n[VALIDATE] Processing query {idx}/{len(queries)}: '{query}'")
-            unvalidated_urls = self.search_links(query=query, max_results=self.max_results)
+            unvalidated_urls = self.search_links(
+                query=query, max_results=self.max_results
+            )
             unvalidated_links.extend(unvalidated_urls)
             print(f"[VALIDATE] Search results: {unvalidated_urls}")
 
             if unvalidated_urls.get("success"):
                 links = unvalidated_urls.get("links", [])
                 print(f"[VALIDATE] Validating {len(links)} URLs...")
-                
+
                 for url_idx, url in enumerate(links, 1):
                     print(f"[VALIDATE] Processing URL {url_idx}/{len(links)}: {url}")
                     html_content = self.getHTML(website=url)
                     if html_content.get("response_code") == 200:
                         try:
-                            validation_result = self.validateHTML(content=html_content.get("content"))
+                            validation_result = self.validateHTML(
+                                content=html_content.get("content")
+                            )
                             matches = validation_result.get("matches", False)
-                            
+
                             # Collect all URLs that match
                             if matches:
-                                print("[VALIDATE] URL validated successfully - content matches")
+                                print(
+                                    "[VALIDATE] URL validated successfully - content matches"
+                                )
                                 validated_urls.append(url)
                             else:
-                                print("[VALIDATE] URL does not match - content does not align")
+                                print(
+                                    "[VALIDATE] URL does not match - content does not align"
+                                )
                         except Exception as e:
-                            print(f"[VALIDATE] Error during validation of URL: {str(e)}")
+                            print(
+                                f"[VALIDATE] Error during validation of URL: {str(e)}"
+                            )
                             continue
                     else:
-                        print(f"[VALIDATE] Skipping URL due to non-200 response code: {html_content.get('response_code')}")
+                        print(
+                            f"[VALIDATE] Skipping URL due to non-200 response code: {html_content.get('response_code')}"
+                        )
             else:
-                print(f"[VALIDATE] Search failed with error: {unvalidated_urls.get('errored', 'Unknown error')}")
+                print(
+                    f"[VALIDATE] Search failed with error: {unvalidated_urls.get('errored', 'Unknown error')}"
+                )
 
         # Keep only the first self.max_results validated URLs
         if len(validated_urls) > self.max_results:
-            top_validated_urls = validated_urls[:self.max_results]
+            top_validated_urls = validated_urls[: self.max_results]
         else:
             top_validated_urls = validated_urls
 
@@ -329,5 +346,5 @@ or
         print(f"[VALIDATE] Total validated URLs: {len(validated_urls)}")
         print(f"[VALIDATE] Returning top {len(top_validated_urls)} validated URLs")
         print(f"[VALIDATE] Insights: {self.insght} and Scope: {self.ppscope}")
-        
+
         return top_validated_urls

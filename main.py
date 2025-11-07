@@ -11,13 +11,17 @@ from validation import ValidateURLs
 app = FastAPI(
     title="Lead Management API",
     description="FastAPI server for lead management with restricted access",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Configure CORS to allow only https://n8n.sesai.in
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://n8n.sesai.in", "http://127.0.0.1:8000", "https://n8n.thelinkai.com"],
+    allow_origins=[
+        "https://n8n.sesai.in",
+        "http://127.0.0.1:8000",
+        "https://n8n.thelinkai.com",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,9 +37,13 @@ async def verify_origin(request: Request, call_next):
     """
     origin = request.headers.get("origin")
     referer = request.headers.get("referer")
-    
-    allowed_origins = ["https://n8n.sesai.in", "http://127.0.0.1:8000", "https://n8n.thelinkai.com"]
-    
+
+    allowed_origins = [
+        "https://n8n.sesai.in",
+        "http://127.0.0.1:8000",
+        "https://n8n.thelinkai.com",
+    ]
+
     # Allow requests without origin/referer for direct API access (like Postman during development)
     # Comment out the following lines in production if you want strict enforcement
     if not origin and not referer:
@@ -43,58 +51,81 @@ async def verify_origin(request: Request, call_next):
         pass
     elif origin and origin not in allowed_origins:
         return JSONResponse(
-            status_code=403,
-            content={"detail": "Access forbidden: Invalid origin"}
+            status_code=403, content={"detail": "Access forbidden: Invalid origin"}
         )
-    elif referer and not any(referer.startswith(allowed) for allowed in allowed_origins):
+    elif referer and not any(
+        referer.startswith(allowed) for allowed in allowed_origins
+    ):
         return JSONResponse(
-            status_code=403,
-            content={"detail": "Access forbidden: Invalid referer"}
+            status_code=403, content={"detail": "Access forbidden: Invalid referer"}
         )
-    
+
     response = await call_next(request)
     return response
 
 
 @app.get("/api/searchr")
-async def search_links(query: str, max_results: int = 25, timelimit: str = 'y'):
+async def search_links(query: str, max_results: int = 25, timelimit: str = "y"):
     """
     Search for links using DuckDuckGo and return all hrefs.
     """
     try:
         results = DDGS().text(
             query,
-            region='wt-wt',
-            safesearch='off',
+            region="wt-wt",
+            safesearch="off",
             timelimit=timelimit,
-            max_results=max_results
+            max_results=max_results,
         )
-        
+
         # Extract only the hrefs
-        links = [result['href'] for result in results]
-        
+        links = [result["href"] for result in results]
+
         return {
             "success": True,
             "query": query,
             "total_results": len(links),
-            "links": links
+            "links": links,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/health")
 async def health_check():
     """
     Health check endpoint to verify that the server is running.
     """
-    return {"status": "ok", "message": "Server is running", "version": "1.0.0"}
+    return {"status": "ok", "message": "Server is running", "version": "2025.11.07"}
+
 
 @app.get("/api/validate")
-async def validate_api(summary: str, pp_scope: str, max_results: int, access_token: str):
+async def validate_api(
+    summary: str,
+    pp_scope: str,
+    max_results: int,
+    access_token: str,
+    original_url: Optional[str] = None,
+):
     validator = ValidateURLs(
         access_token=access_token,
         insight=summary,
         pp_scope=pp_scope,
-        max_results=max_results
+        max_results=max_results,
     )
-    return {"validated_urls": validator.validate()}
+    max_retries = 3
+    validated_urls = []
+
+    for attempt in range(max_retries):
+        validated_urls = validator.validate()
+
+        if len(validated_urls) > 0:
+            break
+
+        if attempt < max_retries - 1:
+            print(f"Attempt {attempt + 1} returned 0 results. Retrying...")
+
+    if original_url and original_url in validated_urls:
+        validated_urls.remove(original_url)
+
+    return {"validated_urls": validated_urls}
