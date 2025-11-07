@@ -113,19 +113,11 @@ async def validate_api(
         pp_scope=pp_scope,
         max_results=max_results,
     )
-    max_retries = 3
-    validated_urls = []
 
-    for attempt in range(max_retries):
-        validated_urls = validator.validate()
-
-        if len(validated_urls) > 0:
-            break
-
-        if attempt < max_retries - 1:
-            print(f"Attempt {attempt + 1} returned 0 results. Retrying...")
-
-    if original_url and original_url in validated_urls:
+    validated_urls = validator.validate()
+    
+    # Remove original_url from the list if it's present and not None
+    if original_url is not None and original_url in validated_urls:
         validated_urls.remove(original_url)
 
     return {"validated_urls": validated_urls}
