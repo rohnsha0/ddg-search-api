@@ -234,7 +234,7 @@ or
                 region='wt-wt',
                 safesearch='off',
                 timelimit=timelimit,
-                max_results=25
+                max_results=40
             )
             
             # Extract only the hrefs
