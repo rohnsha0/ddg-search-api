@@ -286,25 +286,27 @@ or
         print(f"[VALIDATE] Starting validation process with max_retries={max_retries}")
         validated_urls = []
         seen_urls = set()  # Track all URLs we've already seen across retries
-        
+
         retry_count = 0
-        
+
         while retry_count < max_retries:
             print(f"\n[VALIDATE] ===== Retry {retry_count + 1}/{max_retries} =====")
-            
+
             # Increase max_results for DDG search with each retry
             # Start with 50, then 75, then 100, etc.
             current_search_limit = 50 + (retry_count * 25)
             print(f"[VALIDATE] Current DDG search limit: {current_search_limit}")
-            
+
             queries = self.generateSearchQueries()
             print(f"[VALIDATE] Processing {len(queries)} generated queries...")
 
             for idx, query in enumerate(queries, 1):
                 if len(validated_urls) >= self.max_results:
-                    print(f"[VALIDATE] Reached target of {self.max_results} validated URLs, stopping search")
+                    print(
+                        f"[VALIDATE] Reached target of {self.max_results} validated URLs, stopping search"
+                    )
                     break
-                    
+
                 print(f"\n[VALIDATE] Processing query {idx}/{len(queries)}: '{query}'")
                 unvalidated_urls = self.search_links(
                     query=query, max_results=current_search_limit
@@ -313,22 +315,28 @@ or
 
                 if unvalidated_urls.get("success"):
                     links = unvalidated_urls.get("links", [])
-                    
+
                     # Filter out already seen URLs
                     new_links = [url for url in links if url not in seen_urls]
-                    print(f"[VALIDATE] Found {len(links)} URLs, {len(new_links)} are new (not seen before)")
-                    
+                    print(
+                        f"[VALIDATE] Found {len(links)} URLs, {len(new_links)} are new (not seen before)"
+                    )
+
                     # Add new links to seen set
                     seen_urls.update(new_links)
-                    
+
                     print(f"[VALIDATE] Validating {len(new_links)} new URLs...")
 
                     for url_idx, url in enumerate(new_links, 1):
                         if len(validated_urls) >= self.max_results:
-                            print(f"[VALIDATE] Reached target of {self.max_results} validated URLs, stopping validation")
+                            print(
+                                f"[VALIDATE] Reached target of {self.max_results} validated URLs, stopping validation"
+                            )
                             break
-                            
-                        print(f"[VALIDATE] Processing URL {url_idx}/{len(new_links)}: {url}")
+
+                        print(
+                            f"[VALIDATE] Processing URL {url_idx}/{len(new_links)}: {url}"
+                        )
                         html_content = self.getHTML(website=url)
                         if html_content.get("response_code") == 200:
                             try:
@@ -360,16 +368,22 @@ or
                     print(
                         f"[VALIDATE] Search failed with error: {unvalidated_urls.get('errored', 'Unknown error')}"
                     )
-            
+
             # Check if we have enough validated URLs
             if len(validated_urls) >= self.max_results:
-                print(f"[VALIDATE] Successfully found {self.max_results} validated URLs")
+                print(
+                    f"[VALIDATE] Successfully found {self.max_results} validated URLs"
+                )
                 break
             elif len(validated_urls) > 0:
-                print(f"[VALIDATE] Found {len(validated_urls)} validated URLs, stopping retries")
+                print(
+                    f"[VALIDATE] Found {len(validated_urls)} validated URLs, stopping retries"
+                )
                 break
             else:
-                print(f"[VALIDATE] No validated URLs found yet ({len(validated_urls)}/{self.max_results})")
+                print(
+                    f"[VALIDATE] No validated URLs found yet ({len(validated_urls)}/{self.max_results})"
+                )
                 retry_count += 1
                 if retry_count < max_retries:
                     print("[VALIDATE] Will retry with increased search limit...")

@@ -115,9 +115,9 @@ async def validate_api(
     )
 
     validated_urls = validator.validate()
-    
+
     # Remove original_url from the list if it's present and not None
     if original_url is not None and original_url in validated_urls:
         validated_urls.remove(original_url)
 
-    return {"validated_urls": validated_urls}
+    return {"validated_urls": validated_urls, "validation_score": len(validated_urls)}
