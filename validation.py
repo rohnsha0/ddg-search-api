@@ -2,7 +2,6 @@ from openai import OpenAI
 import json
 from ddgs import DDGS
 import requests
-from bs4 import BeautifulSoup
 
 
 class ValidateURLs:
@@ -11,7 +10,10 @@ class ValidateURLs:
     ):
         print("[INIT] Initializing ValidateURLs class...")
         self.access = access_token
-        self.client = OpenAI(api_key=access_token)
+        self.client = OpenAI(
+            api_key=access_token,
+            base_url="https://openrouter.ai/api/v1"
+        )
         self.insght = insight
         self.ppscope = pp_scope
         self.max_results = max_results
@@ -205,7 +207,7 @@ or
     def generateSearchQueries(self):
         print("[QUERY-GEN] Generating search queries...")
         response = self.client.chat.completions.create(
-            model="gpt-4.1-mini",
+            model="mistralai/ministral-8b",
             messages=[
                 {"role": "system", "content": self.SYSTEMPROMPTFORQUERY},
                 {
@@ -262,7 +264,7 @@ or
         print(f"[VALIDATE] HTML content length: {len(content)} characters")
 
         response = self.client.chat.completions.create(
-            model="gpt-4.1-mini",
+            model="mistralai/ministral-8b",
             messages=[
                 {"role": "system", "content": self.SYSTEMPROMPTVALIDATOR},
                 {
@@ -398,6 +400,7 @@ or
 
         print("\n[VALIDATE] Validation process completed")
         print(f"[VALIDATE] Total validated URLs: {len(validated_urls)}")
+        print(f"[VALIDATE] Validated URLs: {validated_urls}")
         print(f"[VALIDATE] Total URLs seen across all retries: {len(seen_urls)}")
         print(f"[VALIDATE] Returning top {len(top_validated_urls)} validated URLs")
         print(f"[VALIDATE] Insights: {self.insght} and Scope: {self.ppscope}")
