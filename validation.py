@@ -207,7 +207,7 @@ or
     def generateSearchQueries(self):
         print("[QUERY-GEN] Generating search queries...")
         response = self.client.chat.completions.create(
-            model="mistralai/ministral-8b",
+            model="openai/gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": self.SYSTEMPROMPTFORQUERY},
                 {
@@ -220,13 +220,7 @@ or
             ],
             response_format={"type": "text"},
         )
-        queries = [
-            response.strip()
-            for response in response.choices[0].message.content.split(",")
-            if response
-        ]
-        print(f"[QUERY-GEN] Generated {len(queries)} search queries: {queries}")
-        return queries
+        return response.choices[0].message.content
 
     def search_links(self, query: str, max_results: int, timelimit: str = "y"):
         print(
@@ -299,8 +293,8 @@ or
             current_search_limit = 50 + (retry_count * 25)
             print(f"[VALIDATE] Current DDG search limit: {current_search_limit}")
 
-            queries = self.generateSearchQueries()
-            print(f"[VALIDATE] Processing {len(queries)} generated queries...")
+            queries = [self.generateSearchQueries()]
+            print(f"[VALIDATE] Processing Query: {queries}")
 
             for idx, query in enumerate(queries, 1):
                 if len(validated_urls) >= self.max_results:
