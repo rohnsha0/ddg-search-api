@@ -9,6 +9,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from selenium_recaptcha_solver import RecaptchaSolver
 import time
 import os
 import json
@@ -26,6 +27,7 @@ class LinkedInCookieFetcher:
         self.email = email or os.getenv('LINKEDIN_EMAIL')
         self.password = password or os.getenv('LINKEDIN_PASSWORD')
         self.driver = None
+        self.recaptcha_solver = None
         
         if not self.email or not self.password:
             raise ValueError("LinkedIn credentials not provided. Set LINKEDIN_EMAIL and LINKEDIN_PASSWORD environment variables or pass them as arguments.")
@@ -79,6 +81,13 @@ class LinkedInCookieFetcher:
             self.driver = webdriver.Chrome(options=chrome_options)
         
         self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        
+        # Initialize reCAPTCHA solver
+        try:
+            self.recaptcha_solver = RecaptchaSolver(driver=self.driver)
+            print("✓ CAPTCHA solver initialized")
+        except Exception as e:
+            print(f"⚠️  CAPTCHA solver initialization warning: {str(e)}")
     
     def login(self):
         """
@@ -118,14 +127,70 @@ class LinkedInCookieFetcher:
             current_url = self.driver.current_url
             if "checkpoint" in current_url or "challenge" in current_url:
                 print("\n⚠️  Security checkpoint detected!")
-                print("Please complete the security verification in the browser window.")
-                print("Waiting for you to complete the verification...")
                 
-                # Wait for user to complete verification
-                WebDriverWait(self.driver, 120).until(
-                    lambda d: "feed" in d.current_url or "mynetwork" in d.current_url
-                )
-                print("✓ Verification completed!")
+                # Try to solve CAPTCHA if present
+                if self.recaptcha_solver:
+                    try:
+                        print("🔄 Attempting to solve CAPTCHA...")
+                        
+                        # Check for reCAPTCHA iframe
+                        recaptcha_iframe = self.driver.find_elements(By.CSS_SELECTOR, 'iframe[src*="recaptcha"]')
+                        
+                        if recaptcha_iframe:
+                            print("✓ reCAPTCHA detected, solving...")
+                            self.recaptcha_solver.click_recaptcha_v2(iframe=recaptcha_iframe[0])
+                            print("✓ CAPTCHA solved successfully!")
+                            time.sleep(3)
+                        else:
+                            print("⚠️  No reCAPTCHA iframe found, checking for other CAPTCHA types...")
+                            
+                            # Try to solve any audio CAPTCHA if present
+                            try:
+                                # Wait a bit for the page to fully load
+                                time.sleep(2)
+                                
+                                # Look for CAPTCHA elements
+                                captcha_elements = self.driver.find_elements(By.CSS_SELECTOR, '[class*="captcha"], [id*="captcha"]')
+                                if captcha_elements:
+                                    print("🔄 Found CAPTCHA elements, attempting to solve...")
+                                    # The solver will automatically try to solve
+                                    time.sleep(5)
+                                else:
+                                    print("⚠️  Please complete the security verification manually in the browser window.")
+                                    print("Waiting for you to complete the verification...")
+                                    
+                                    # Wait for user to complete verification
+                                    WebDriverWait(self.driver, 120).until(
+                                        lambda d: "feed" in d.current_url or "mynetwork" in d.current_url
+                                    )
+                                    print("✓ Verification completed!")
+                            except Exception as inner_e:
+                                print(f"⚠️  Could not auto-solve: {str(inner_e)}")
+                                print("Please complete the verification manually...")
+                                WebDriverWait(self.driver, 120).until(
+                                    lambda d: "feed" in d.current_url or "mynetwork" in d.current_url
+                                )
+                                print("✓ Verification completed!")
+                                
+                    except Exception as captcha_error:
+                        print(f"⚠️  CAPTCHA solving error: {str(captcha_error)}")
+                        print("Please complete the security verification manually in the browser window.")
+                        print("Waiting for you to complete the verification...")
+                        
+                        # Wait for user to complete verification
+                        WebDriverWait(self.driver, 120).until(
+                            lambda d: "feed" in d.current_url or "mynetwork" in d.current_url
+                        )
+                        print("✓ Verification completed!")
+                else:
+                    print("Please complete the security verification manually in the browser window.")
+                    print("Waiting for you to complete the verification...")
+                    
+                    # Wait for user to complete verification
+                    WebDriverWait(self.driver, 120).until(
+                        lambda d: "feed" in d.current_url or "mynetwork" in d.current_url
+                    )
+                    print("✓ Verification completed!")
             
             # Verify successful login by checking URL
             if "feed" in self.driver.current_url or "mynetwork" in self.driver.current_url or "in/" in self.driver.current_url:
