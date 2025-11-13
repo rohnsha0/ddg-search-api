@@ -14,6 +14,8 @@ services:
     command: uvicorn main:app --host 0.0.0.0 --port 8000
     networks:
       - fastapi_network
+    # Add shared memory size for Chrome (prevents crashes)
+    shm_size: '2gb'
 
 networks:
   fastapi_network:
