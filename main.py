@@ -7,15 +7,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 from validation import ValidateURLs
-
-# Import LinkedIn cookie fetcher
-try:
-    from linkedin_autom.main import LinkedInCookieFetcher
-except ImportError:
-    # Fallback for different import scenarios
-    import sys
-    sys.path.append(os.path.join(os.path.dirname(__file__), 'linkedin-autom'))
-    from main import LinkedInCookieFetcher
+from linkedin_autom.fetcher import LinkedInCookieFetcher
 
 app = FastAPI(
     title="Lead Management API",
