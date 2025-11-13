@@ -1,3 +1,3 @@
-from .mainn import LinkedInCookieFetcher
+from .fetcher import LinkedInCookieFetcher
 
 __all__ = ['LinkedInCookieFetcher']
