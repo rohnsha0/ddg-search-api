@@ -10,12 +10,12 @@ from validation import ValidateURLs
 
 # Import LinkedIn cookie fetcher
 try:
-    from linkedin_autom.mainn import LinkedInCookieFetcher
+    from linkedin_autom.main import LinkedInCookieFetcher
 except ImportError:
     # Fallback for different import scenarios
     import sys
     sys.path.append(os.path.join(os.path.dirname(__file__), 'linkedin-autom'))
-    from mainn import LinkedInCookieFetcher
+    from main import LinkedInCookieFetcher
 
 app = FastAPI(
     title="Lead Management API",

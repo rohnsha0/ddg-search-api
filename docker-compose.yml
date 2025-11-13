@@ -1,9 +1,7 @@
 services:
-  fastapi:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: fastapi_lead_management
+  ddg-seach-api:
+    image: rohnsha0/ddg-search-api:latest
+    container_name: ddg-seach-api
     ports:
       - "8000:8000"
     environment:
@@ -11,7 +9,6 @@ services:
     volumes:
       - .:/app
     restart: unless-stopped
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
     networks:
       - fastapi_network
     # Add shared memory size for Chrome (prevents crashes)
