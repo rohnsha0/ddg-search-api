@@ -80,13 +80,32 @@ class LinkedInCookieFetcherUndetected:
             # version_main parameter helps ensure compatibility
             driver_path = os.getenv('CHROMEDRIVER_PATH')
             
-            if driver_path:
-                self.driver = uc.Chrome(
-                    options=options,
-                    driver_executable_path=driver_path,
-                    use_subprocess=True,
-                    version_main=None  # Auto-detect Chrome version
-                )
+            # Check if driver_path exists and is accessible
+            if driver_path and os.path.exists(driver_path):
+                try:
+                    # Check if we have execute permissions
+                    if os.access(driver_path, os.X_OK):
+                        self.driver = uc.Chrome(
+                            options=options,
+                            driver_executable_path=driver_path,
+                            use_subprocess=True,
+                            version_main=None  # Auto-detect Chrome version
+                        )
+                    else:
+                        print(f"⚠️  No execute permission for {driver_path}, using auto-detection")
+                        self.driver = uc.Chrome(
+                            options=options,
+                            use_subprocess=True,
+                            version_main=None
+                        )
+                except Exception as e:
+                    print(f"⚠️  Error using specified driver path: {str(e)}")
+                    print("⚠️  Falling back to auto-detection")
+                    self.driver = uc.Chrome(
+                        options=options,
+                        use_subprocess=True,
+                        version_main=None
+                    )
             else:
                 self.driver = uc.Chrome(
                     options=options,

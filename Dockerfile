@@ -50,6 +50,10 @@ COPY . .
 
 # Create a non-root user to run the application
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+
+# Fix chromedriver permissions - make it executable by all users
+RUN chmod +x /usr/bin/chromedriver && chmod 755 /usr/bin/chromedriver
+
 USER appuser
 
 # Expose port
