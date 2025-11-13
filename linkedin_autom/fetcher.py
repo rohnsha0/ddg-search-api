@@ -154,7 +154,7 @@ class LinkedInCookieFetcher:
                         
                         if recaptcha_iframe:
                             print("✓ reCAPTCHA detected, solving...")
-                            self.recaptcha_solver.click_recaptcha_v2(iframe=recaptcha_iframe[0])
+                            self.recaptcha_solver.click_recaptcha_v2(iframe=recaptcha_iframe)
                             print("✓ CAPTCHA solved successfully!")
                             time.sleep(3)
                         else:
