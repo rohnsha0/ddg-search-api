@@ -58,7 +58,7 @@ class LinkedInCookieFetcher:
         chrome_options.add_argument('--disable-setuid-sandbox')
         
         # Window size (important for headless)
-        chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--window-size=100,100')
         chrome_options.add_argument('--start-maximized')
         
         # Memory and resource optimization
