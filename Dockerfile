@@ -1,16 +1,25 @@
-FROM python:3.11-slim
+FROM ubuntu:22.04
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for Chrome and Selenium
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Python 3.11 and system dependencies
 RUN apt-get update && apt-get install -y \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-distutils \
+    python3-pip \
     wget \
     gnupg \
     unzip \
     curl \
-    chromium \
-    chromium-driver \
+    chromium-browser \
+    chromium-chromedriver \
     fonts-liberation \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -34,8 +43,12 @@ RUN apt-get update && apt-get install -y \
     libvulkan1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Set Python 3.11 as default
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
+
 # Set environment variables for Chrome
-ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROME_BIN=/usr/bin/chromium-browser
 ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 ENV DISPLAY=:99
 
