@@ -134,7 +134,7 @@ class LinkedInCookieFetcher:
                         print("🔄 Attempting to solve CAPTCHA...")
                         
                         # Check for reCAPTCHA iframe
-                        recaptcha_iframe = self.driver.find_elements(By.CSS_SELECTOR, 'iframe[src*="recaptcha"]')
+                        recaptcha_iframe = self.driver.find_element(By.XPATH, '//iframe[@title="reCAPTCHA"]')
                         
                         if recaptcha_iframe:
                             print("✓ reCAPTCHA detected, solving...")
