@@ -141,7 +141,7 @@ async def get_linkedin_cookies(email: Optional[str] = None, password: Optional[s
         fetcher = LinkedInCookieFetcher(email=email, password=password)
         
         # Set up the driver in headless mode for API usage
-        fetcher.setup_driver(headless=False)
+        fetcher.setup_driver(headless=True)
         
         # Login to LinkedIn
         if not fetcher.login():
