@@ -36,6 +36,13 @@ class LinkedInCookieFetcher:
         """
         Set up the Chrome WebDriver with appropriate options.
         
+        Anti-Detection Strategy:
+        - Uses Windows NT user-agent (harder to detect than Linux-based)
+        - Removes 'HeadlessChrome' signature from user-agent
+        - Disables automation flags and webdriver property
+        - Overrides navigator properties to appear legitimate
+        - Sets realistic language and plugin values
+        
         Args:
             headless: Whether to run browser in headless mode (default True for server environments)
         """
@@ -64,8 +71,9 @@ class LinkedInCookieFetcher:
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
-        # Add user agent to avoid detection
-        chrome_options.add_argument('user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        # Add realistic user agent to avoid detection (Windows-based, non-headless)
+        # Using Windows NT user-agent as they are harder to detect than Linux-based ones
+        chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
         # Set binary location if specified
         chrome_bin = os.getenv('CHROME_BIN')
@@ -81,6 +89,14 @@ class LinkedInCookieFetcher:
             self.driver = webdriver.Chrome(options=chrome_options)
         
         self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        
+        # Additional anti-detection measures
+        # Override navigator properties to make the browser look more legitimate
+        self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+            "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        })
+        self.driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
+        self.driver.execute_script("Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']})")
         
         # Initialize reCAPTCHA solver
         try:
