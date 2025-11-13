@@ -43,18 +43,28 @@ RUN apt-get update && apt-get install -y \
     libvulkan1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Chrome and ChromeDriver using Google's official repository
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
+# Install Chrome using Google's official repository
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ChromeDriver
-RUN CHROMEDRIVER_VERSION=$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE) \
-    && wget -q -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip \
-    && unzip /tmp/chromedriver.zip -d /usr/local/bin/ \
-    && rm /tmp/chromedriver.zip \
+# Install ChromeDriver using Chrome for Testing (matches Chrome version automatically)
+RUN CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+\.\d+') \
+    && CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d. -f1) \
+    && echo "Chrome version: $CHROME_VERSION (Major: $CHROME_MAJOR_VERSION)" \
+    && CHROMEDRIVER_URL="https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone-with-downloads.json" \
+    && CHROMEDRIVER_VERSION=$(curl -s $CHROMEDRIVER_URL | grep -A 10 "\"milestone\": \"$CHROME_MAJOR_VERSION\"" | grep -A 5 '"platform": "linux64"' | grep '"url"' | head -1 | cut -d'"' -f4) \
+    && if [ -z "$CHROMEDRIVER_VERSION" ]; then \
+        echo "Fetching latest ChromeDriver version..." && \
+        CHROMEDRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | grep -A 5 '"channel": "Stable"' | grep -A 5 '"platform": "linux64"' | grep '"url"' | head -1 | cut -d'"' -f4); \
+    fi \
+    && echo "ChromeDriver URL: $CHROMEDRIVER_VERSION" \
+    && wget -q -O /tmp/chromedriver-linux64.zip "$CHROMEDRIVER_VERSION" \
+    && unzip /tmp/chromedriver-linux64.zip -d /tmp/ \
+    && mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/ \
+    && rm -rf /tmp/chromedriver-linux64.zip /tmp/chromedriver-linux64 \
     && chmod +x /usr/local/bin/chromedriver
 
 # Set Python 3.11 as default
