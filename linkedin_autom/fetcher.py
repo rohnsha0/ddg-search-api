@@ -30,20 +30,34 @@ class LinkedInCookieFetcher:
         if not self.email or not self.password:
             raise ValueError("LinkedIn credentials not provided. Set LINKEDIN_EMAIL and LINKEDIN_PASSWORD environment variables or pass them as arguments.")
     
-    def setup_driver(self, headless=False):
+    def setup_driver(self, headless=True):
         """
         Set up the Chrome WebDriver with appropriate options.
         
         Args:
-            headless: Whether to run browser in headless mode
+            headless: Whether to run browser in headless mode (default True for server environments)
         """
         chrome_options = Options()
         
-        if headless:
-            chrome_options.add_argument('--headless')
+        # Essential arguments for running Chrome in Docker/VPS
+        chrome_options.add_argument('--headless=new')  # Use new headless mode
+        chrome_options.add_argument('--no-sandbox')  # Required for Docker
+        chrome_options.add_argument('--disable-dev-shm-usage')  # Overcome limited resource problems
+        chrome_options.add_argument('--disable-gpu')  # Disable GPU acceleration
+        chrome_options.add_argument('--disable-software-rasterizer')
+        chrome_options.add_argument('--disable-extensions')
+        chrome_options.add_argument('--disable-setuid-sandbox')
         
-        chrome_options.add_argument('--no-sandbox')
+        # Window size (important for headless)
+        chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--start-maximized')
+        
+        # Memory and resource optimization
         chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-browser-side-navigation')
+        chrome_options.add_argument('--dns-prefetch-disable')
+        
+        # Anti-detection measures
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
@@ -51,7 +65,19 @@ class LinkedInCookieFetcher:
         # Add user agent to avoid detection
         chrome_options.add_argument('user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
-        self.driver = webdriver.Chrome(options=chrome_options)
+        # Set binary location if specified
+        chrome_bin = os.getenv('CHROME_BIN')
+        if chrome_bin:
+            chrome_options.binary_location = chrome_bin
+        
+        # Set ChromeDriver path if specified
+        chromedriver_path = os.getenv('CHROMEDRIVER_PATH')
+        if chromedriver_path and os.path.exists(chromedriver_path):
+            service = Service(chromedriver_path)
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
+        else:
+            self.driver = webdriver.Chrome(options=chrome_options)
+        
         self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     
     def login(self):
@@ -184,8 +210,8 @@ def main():
         # Initialize the fetcher
         fetcher = LinkedInCookieFetcher()
         
-        # Set up the driver (set headless=False to see the browser)
-        fetcher.setup_driver(headless=False)
+        # Set up the driver (headless=True for server environments)
+        fetcher.setup_driver(headless=True)
         
         # Login to LinkedIn
         if fetcher.login():
