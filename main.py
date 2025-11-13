@@ -8,6 +8,7 @@ from typing import List, Optional
 import os
 from validation import ValidateURLs
 from linkedin_autom.fetcher import LinkedInCookieFetcher
+from linkedin_autom.fetcher_undetected import LinkedInCookieFetcherUndetected
 
 app = FastAPI(
     title="Lead Management API",
@@ -128,6 +129,7 @@ async def validate_api(
 async def get_linkedin_cookies(email: Optional[str] = None, password: Optional[str] = None):
     """
     Fetch LinkedIn cookies (JSESSIONID and li_at) by logging in.
+    Uses the standard selenium driver.
     
     Args:
         email: LinkedIn email (optional, uses LINKEDIN_EMAIL env var if not provided)
@@ -164,6 +166,58 @@ async def get_linkedin_cookies(email: Optional[str] = None, password: Optional[s
             "success": True,
             "cookies": cookies,
             "message": "LinkedIn cookies retrieved successfully"
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        if 'fetcher' in locals():
+            fetcher.close()
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.post("/api/linkedin/cookies/undetected")
+async def get_linkedin_cookies_undetected(email: Optional[str] = None, password: Optional[str] = None):
+    """
+    Fetch LinkedIn cookies (JSESSIONID and li_at) by logging in using undetected-chromedriver.
+    This version has better anti-detection capabilities and is recommended for VPS environments.
+    
+    Args:
+        email: LinkedIn email (optional, uses LINKEDIN_EMAIL env var if not provided)
+        password: LinkedIn password (optional, uses LINKEDIN_PASSWORD env var if not provided)
+    
+    Returns:
+        JSON with JSESSIONID and li_at cookies
+    """
+    try:
+        # Initialize the undetected fetcher
+        fetcher = LinkedInCookieFetcherUndetected(email=email, password=password)
+        
+        # Set up the driver in headless mode for API usage
+        fetcher.setup_driver(headless=True)
+        
+        # Login to LinkedIn
+        if not fetcher.login():
+            fetcher.close()
+            raise HTTPException(status_code=401, detail="LinkedIn login failed")
+        
+        # Get cookies
+        cookies = fetcher.get_cookies()
+        
+        # Close the browser
+        fetcher.close()
+        
+        if not cookies or not cookies.get('JSESSIONID') or not cookies.get('li_at'):
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to retrieve cookies. One or both cookies are missing."
+            )
+        
+        return {
+            "success": True,
+            "cookies": cookies,
+            "message": "LinkedIn cookies retrieved successfully (undetected mode)",
+            "mode": "undetected"
         }
         
     except ValueError as e:

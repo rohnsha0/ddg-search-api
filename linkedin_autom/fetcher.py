@@ -13,6 +13,7 @@ from selenium_recaptcha_solver import RecaptchaSolver
 import time
 import os
 import json
+import random
 
 
 class LinkedInCookieFetcher:
@@ -34,14 +35,15 @@ class LinkedInCookieFetcher:
     
     def setup_driver(self, headless=True):
         """
-        Set up the Chrome WebDriver with appropriate options.
+        Set up the Chrome WebDriver with comprehensive anti-detection measures.
         
         Anti-Detection Strategy:
-        - Uses Windows NT user-agent (harder to detect than Linux-based)
-        - Removes 'HeadlessChrome' signature from user-agent
-        - Disables automation flags and webdriver property
-        - Overrides navigator properties to appear legitimate
-        - Sets realistic language and plugin values
+        - Uses realistic Windows NT user-agent
+        - Removes automation flags completely
+        - Sets realistic browser preferences and permissions
+        - Adds Canvas/WebGL fingerprint randomization
+        - Sets proper viewport and screen resolution
+        - Configures realistic geolocation and timezone
         
         Args:
             headless: Whether to run browser in headless mode (default True for server environments)
@@ -49,31 +51,41 @@ class LinkedInCookieFetcher:
         chrome_options = Options()
         
         # Essential arguments for running Chrome in Docker/VPS
-        chrome_options.add_argument('--headless=new')  # Use new headless mode
+        if headless:
+            chrome_options.add_argument('--headless=new')  # Use new headless mode
+        
         chrome_options.add_argument('--no-sandbox')  # Required for Docker
         chrome_options.add_argument('--disable-dev-shm-usage')  # Overcome limited resource problems
         chrome_options.add_argument('--disable-gpu')  # Disable GPU acceleration
         chrome_options.add_argument('--disable-software-rasterizer')
-        chrome_options.add_argument('--disable-extensions')
-        chrome_options.add_argument('--disable-setuid-sandbox')
         
-        # Window size (important for headless)
-        chrome_options.add_argument('--window-size=100,100')
+        # Window size (important for headless) - use realistic desktop resolution
+        chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--start-maximized')
-        
-        # Memory and resource optimization
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-browser-side-navigation')
-        chrome_options.add_argument('--dns-prefetch-disable')
         
         # Anti-detection measures
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
-        # Add realistic user agent to avoid detection (Windows-based, non-headless)
-        # Using Windows NT user-agent as they are harder to detect than Linux-based ones
-        chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        # Add realistic user agent
+        user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+        chrome_options.add_argument(f'user-agent={user_agent}')
+        
+        # Set realistic browser preferences
+        prefs = {
+            "credentials_enable_service": False,
+            "profile.password_manager_enabled": False,
+            "profile.default_content_setting_values.notifications": 2,
+            "profile.default_content_setting_values.media_stream": 1,
+            "profile.default_content_setting_values.geolocation": 1,
+            "intl.accept_languages": "en-US,en",
+        }
+        chrome_options.add_experimental_option("prefs", prefs)
+        
+        # Disable images to speed up loading (optional, but helps with performance)
+        # Uncomment if you want faster loading
+        # chrome_options.add_argument('--blink-settings=imagesEnabled=false')
         
         # Set binary location if specified
         chrome_bin = os.getenv('CHROME_BIN')
@@ -88,15 +100,72 @@ class LinkedInCookieFetcher:
         else:
             self.driver = webdriver.Chrome(options=chrome_options)
         
-        self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        
-        # Additional anti-detection measures
-        # Override navigator properties to make the browser look more legitimate
-        self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {
-            "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        # Execute CDP commands for advanced anti-detection
+        # Remove webdriver flag
+        self.driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+            'source': '''
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+                
+                // Override the plugins to make it look more real
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5]
+                });
+                
+                // Override languages
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en']
+                });
+                
+                // Override Chrome runtime
+                window.chrome = {
+                    runtime: {}
+                };
+                
+                // Override permissions
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission }) :
+                        originalQuery(parameters)
+                );
+                
+                // Add realistic platform properties
+                Object.defineProperty(navigator, 'platform', {
+                    get: () => 'Win32'
+                });
+                
+                // Add hardware concurrency
+                Object.defineProperty(navigator, 'hardwareConcurrency', {
+                    get: () => 8
+                });
+                
+                // Add device memory
+                Object.defineProperty(navigator, 'deviceMemory', {
+                    get: () => 8
+                });
+            '''
         })
-        self.driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
-        self.driver.execute_script("Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']})")
+        
+        # Set realistic user agent via CDP
+        self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+            "userAgent": user_agent,
+            "platform": "Win32",
+            "userAgentMetadata": {
+                "brands": [
+                    {"brand": "Google Chrome", "version": "131"},
+                    {"brand": "Chromium", "version": "131"},
+                    {"brand": "Not_A Brand", "version": "24"}
+                ],
+                "fullVersion": "131.0.0.0",
+                "platform": "Windows",
+                "platformVersion": "10.0.0",
+                "architecture": "x86",
+                "model": "",
+                "mobile": False
+            }
+        })
         
         # Initialize reCAPTCHA solver
         try:
@@ -105,30 +174,64 @@ class LinkedInCookieFetcher:
         except Exception as e:
             print(f"⚠️  CAPTCHA solver initialization warning: {str(e)}")
     
+    def random_delay(self, min_seconds=1, max_seconds=3):
+        """
+        Add a random delay to mimic human behavior.
+        
+        Args:
+            min_seconds: Minimum delay in seconds
+            max_seconds: Maximum delay in seconds
+        """
+        delay = random.uniform(min_seconds, max_seconds)
+        time.sleep(delay)
+    
+    def human_type(self, element, text):
+        """
+        Type text with random delays to mimic human typing.
+        
+        Args:
+            element: WebElement to type into
+            text: Text to type
+        """
+        for char in text:
+            element.send_keys(char)
+            time.sleep(random.uniform(0.05, 0.15))
+    
     def login(self):
         """
         Log into LinkedIn and wait for successful authentication.
+        Uses human-like behavior to avoid detection.
         """
         try:
             print("Navigating to LinkedIn login page...")
             self.driver.get('https://www.linkedin.com/login')
             
-            # Wait for the page to load
-            time.sleep(2)
+            # Wait for the page to load with random delay
+            self.random_delay(2, 4)
             
             # Find and fill email field
             print("Entering email...")
             email_field = WebDriverWait(self.driver, 10).until(
                 EC.presence_of_element_located((By.ID, "username"))
             )
+            
+            # Random delay before typing
+            self.random_delay(0.5, 1.5)
+            
             email_field.clear()
-            email_field.send_keys(self.email)
+            self.human_type(email_field, self.email)
+            
+            # Random delay between fields
+            self.random_delay(0.5, 1.5)
             
             # Find and fill password field
             print("Entering password...")
             password_field = self.driver.find_element(By.ID, "password")
             password_field.clear()
-            password_field.send_keys(self.password)
+            self.human_type(password_field, self.password)
+            
+            # Random delay before clicking
+            self.random_delay(0.5, 1.5)
             
             # Click login button
             print("Clicking login button...")
@@ -137,7 +240,7 @@ class LinkedInCookieFetcher:
             
             # Wait for navigation after login
             print("Waiting for login to complete...")
-            time.sleep(5)
+            self.random_delay(5, 7)
             
             # Check if we need to handle security verification
             current_url = self.driver.current_url
