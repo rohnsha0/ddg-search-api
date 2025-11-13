@@ -45,3 +45,4 @@ zope.event==6.0
 zope.interface==8.0.1
 openai==2.7.1
 selenium>=4.15.0
+selenium_recaptcha_solver==1.9.1
