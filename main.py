@@ -117,12 +117,22 @@ async def get_holidays(year: int, timeframe: Optional[str] = None):
         for date, name in sorted(filtered_holidays.items())
     ]
     
+    # Add 2 test holidays
+    today = datetime.now().date()
+    test_holidays = [
+        {"date": str(today), "name": "Test Holiday 1"},
+        {"date": str(today + timedelta(days=3)), "name": "Test Holiday 2"}
+    ]
+    
+    # Combine test holidays with actual holidays
+    all_holidays = test_holidays + holidays_list
+    
     return {
         "success": True,
         "year": year,
         "timeframe": timeframe,
-        "total_holidays": len(holidays_list),
-        "holidays": holidays_list,
+        "total_holidays": len(all_holidays),
+        "holidays": all_holidays,
     }
 
 @app.get("/api/searchr")
