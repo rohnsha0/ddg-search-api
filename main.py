@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 from validation import ValidateURLs
+import holidays
+from datetime import datetime, timedelta
 
 app = FastAPI(
     title="Lead Management API",
@@ -63,6 +65,65 @@ async def verify_origin(request: Request, call_next):
     response = await call_next(request)
     return response
 
+
+@app.get("/api/holidays")
+async def get_holidays(year: int, timeframe: Optional[str] = None):
+    """
+    Get Indian holidays for a given year.
+    
+    Args:
+        year: The year to get holidays for
+        timeframe: Optional filter - 'week' for current week (Sun-Sat), 'month' for current month
+    """
+    indian_holidays = holidays.India(years=year)
+    
+    # Filter by timeframe if specified
+    if timeframe:
+        today = datetime.now().date()
+        
+        if timeframe.lower() == "week":
+            # Get start of week (Sunday)
+            # weekday() returns 0 for Monday, 6 for Sunday
+            days_since_sunday = (today.weekday() + 1) % 7
+            start_of_week = today - timedelta(days=days_since_sunday)
+            # Get end of week (Saturday)
+            end_of_week = start_of_week + timedelta(days=6)
+            filtered_holidays = {
+                date: name
+                for date, name in indian_holidays.items()
+                if start_of_week <= date <= end_of_week
+            }
+        elif timeframe.lower() == "month":
+            # Get start of current month
+            start_of_month = today.replace(day=1)
+            # Get end of current month
+            if today.month == 12:
+                end_of_month = today.replace(day=31)
+            else:
+                end_of_month = (today.replace(month=today.month + 1, day=1) - timedelta(days=1))
+            filtered_holidays = {
+                date: name
+                for date, name in indian_holidays.items()
+                if start_of_month <= date <= end_of_month
+            }
+        else:
+            # If invalid timeframe, return all holidays
+            filtered_holidays = indian_holidays
+    else:
+        filtered_holidays = indian_holidays
+    
+    holidays_list = [
+        {"date": str(date), "name": name}
+        for date, name in sorted(filtered_holidays.items())
+    ]
+    
+    return {
+        "success": True,
+        "year": year,
+        "timeframe": timeframe,
+        "total_holidays": len(holidays_list),
+        "holidays": holidays_list,
+    }
 
 @app.get("/api/searchr")
 async def search_links(query: str, max_results: int = 25, timelimit: str = "y"):
