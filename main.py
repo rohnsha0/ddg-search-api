@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from ddgs import DDGS
 from openai import OpenAI
 from pydantic import BaseModel
@@ -191,7 +191,7 @@ async def validate_api(
 async def convert_to_pdf(file: UploadFile = File(...)):
     """
     Convert uploaded document (DOCX, etc.) to PDF using LibreOffice.
-    Returns the path to the generated PDF file.
+    Returns the PDF file as a downloadable attachment.
     """
     try:
         # Create output folder if it doesn't exist
@@ -221,13 +221,12 @@ async def convert_to_pdf(file: UploadFile = File(...)):
         if not os.path.exists(pdf_path):
             raise Exception(f"PDF file not created at {pdf_path}")
         
-        return {
-            "success": True,
-            "message": "File converted to PDF successfully",
-            "pdf_filename": pdf_filename,
-            "pdf_path": pdf_path,
-            "original_filename": file.filename
-        }
+        # Return the PDF file for download
+        return FileResponse(
+            path=pdf_path,
+            filename=pdf_filename,
+            media_type="application/pdf"
+        )
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
