@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from ddgs import DDGS
@@ -9,6 +9,7 @@ import os
 from validation import ValidateURLs
 import holidays
 from datetime import datetime, timedelta
+import subprocess
 
 app = FastAPI(
     title="Lead Management API",
@@ -23,6 +24,7 @@ app.add_middleware(
         "https://n8n.sesai.in",
         "http://127.0.0.1:8000",
         "https://n8n.thelinkai.com",
+        "http://69.62.82.163:8000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -44,6 +46,7 @@ async def verify_origin(request: Request, call_next):
         "https://n8n.sesai.in",
         "http://127.0.0.1:8000",
         "https://n8n.thelinkai.com",
+        "http://69.62.82.163:8000",
     ]
 
     # Allow requests without origin/referer for direct API access (like Postman during development)
@@ -182,3 +185,49 @@ async def validate_api(
         validated_urls.remove(original_url)
 
     return {"validated_urls": validated_urls, "validation_score": len(validated_urls)}
+
+
+@app.post("/api/convert-to-pdf")
+async def convert_to_pdf(file: UploadFile = File(...)):
+    """
+    Convert uploaded document (DOCX, etc.) to PDF using LibreOffice.
+    Returns the path to the generated PDF file.
+    """
+    try:
+        # Create output folder if it doesn't exist
+        os.makedirs("output_folder", exist_ok=True)
+        
+        # Save uploaded file temporarily
+        temp_file_path = f"output_folder/{file.filename}"
+        with open(temp_file_path, "wb") as buffer:
+            buffer.write(await file.read())
+        
+        # Convert to PDF using LibreOffice
+        result = subprocess.run([
+            'libreoffice',
+            '--headless',
+            '--convert-to', 'pdf',
+            '--outdir', 'output_folder',
+            temp_file_path
+        ], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            raise Exception(f"Conversion failed: {result.stderr}")
+        
+        # Get the PDF filename
+        pdf_filename = os.path.splitext(file.filename)[0] + ".pdf"
+        pdf_path = f"output_folder/{pdf_filename}"
+        
+        if not os.path.exists(pdf_path):
+            raise Exception(f"PDF file not created at {pdf_path}")
+        
+        return {
+            "success": True,
+            "message": "File converted to PDF successfully",
+            "pdf_filename": pdf_filename,
+            "pdf_path": pdf_path,
+            "original_filename": file.filename
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
