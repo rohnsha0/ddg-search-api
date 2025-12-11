@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 from validation import ValidateURLs
-from script import WeeklyStatusReportGenerator
+from weeklyreportgenerator import WeeklyStatusReportGenerator
 import holidays
 from datetime import datetime, timedelta
 import subprocess

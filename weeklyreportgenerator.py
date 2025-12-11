@@ -52,7 +52,18 @@ class WeeklyStatusReportGenerator:
             tblBorders.append(border)
             
         tblPr.append(tblBorders)
+        self.keep_table_rows_together(table)
     
+
+    def keep_table_rows_together(self, table):
+        """Prevent table rows from breaking across pages"""
+        for row in table.rows:
+            tr = row._element
+            trPr = tr.get_or_add_trPr()
+            # Keep row together on one page
+            cantSplit = OxmlElement('w:cantSplit')
+            trPr.append(cantSplit)
+
     def create_generic_table(self, doc, section_title, headers, data_rows, column_widths=None):
         """
         Create a professionally formatted table with given headers and data
