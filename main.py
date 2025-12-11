@@ -1,12 +1,12 @@
 from fastapi import FastAPI, Request, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from ddgs import DDGS
-from openai import OpenAI
 from pydantic import BaseModel
 from typing import List, Optional
 import os
 from validation import ValidateURLs
+from script import WeeklyStatusReportGenerator
 import holidays
 from datetime import datetime, timedelta
 import subprocess
@@ -226,6 +226,142 @@ async def convert_to_pdf(file: UploadFile = File(...)):
             path=pdf_path,
             filename=pdf_filename,
             media_type="application/pdf"
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============= Pydantic Models for Weekly Status Report =============
+
+class ProgressItem(BaseModel):
+    """Progress data item"""
+    area: str
+    planned: str
+    completed: str
+    percent: str
+    notes: str
+
+
+class TaskItem(BaseModel):
+    """Task item"""
+    tasks: str
+    owner: str
+    notes: str
+
+
+class PlannedItem(BaseModel):
+    """Planned item for next week"""
+    task: str
+    owner: str
+    expected_outcome: str
+
+
+class RiskItem(BaseModel):
+    """Risk/Issue item"""
+    risk_issue: str
+    impact_hml: str
+    owner: str
+    mitigation: str
+
+
+class BlockerItem(BaseModel):
+    """Blocker item"""
+    blockers: str
+    owner: str
+    action_reqd: str
+
+
+class MilestoneItem(BaseModel):
+    """Milestone status item"""
+    milestone: str
+    planned_date: str
+    status: str
+    comment: str
+
+
+class DecisionItem(BaseModel):
+    """Decision item"""
+    decision: str
+    impact: str
+    due_by: str
+
+
+class DependencyItem(BaseModel):
+    """Dependency item"""
+    dependency: str
+    status: str
+    owner: str
+
+
+class ActionItem(BaseModel):
+    """Action item"""
+    action_item: str
+    owner: str
+    due_by: str
+    status: str
+
+
+class WeeklyStatusReportRequest(BaseModel):
+    """Request model for weekly status report generation"""
+    project_name: str
+    report_date: str
+    progress_data: List[ProgressItem]
+    client_logo_path: Optional[str] = None
+    company_logo_path: Optional[str] = None
+    tasks_completed: Optional[List[TaskItem]] = None
+    planned_next_week: Optional[List[PlannedItem]] = None
+    risks_issues: Optional[List[RiskItem]] = None
+    blockers: Optional[List[BlockerItem]] = None
+    milestone_status: Optional[List[MilestoneItem]] = None
+    decisions_needed: Optional[List[DecisionItem]] = None
+    dependencies: Optional[List[DependencyItem]] = None
+    action_items: Optional[List[ActionItem]] = None
+
+
+# ============= API Endpoints =============
+
+@app.post("/api/generate-weekly-report")
+async def generate_weekly_report(request: WeeklyStatusReportRequest):
+    """
+    Generate a professional weekly status report and return as DOCX file.
+    
+    Takes JSON input with report data and returns a downloadable Word document.
+    """
+    try:
+        generator = WeeklyStatusReportGenerator()
+        
+        # Convert Pydantic models to dictionaries
+        progress_data_list = [item.dict() for item in request.progress_data]
+        tasks_completed_list = [item.dict() for item in request.tasks_completed] if request.tasks_completed else None
+        planned_next_week_list = [item.dict() for item in request.planned_next_week] if request.planned_next_week else None
+        risks_issues_list = [item.dict() for item in request.risks_issues] if request.risks_issues else None
+        blockers_list = [item.dict() for item in request.blockers] if request.blockers else None
+        milestone_status_list = [item.dict() for item in request.milestone_status] if request.milestone_status else None
+        decisions_needed_list = [item.dict() for item in request.decisions_needed] if request.decisions_needed else None
+        dependencies_list = [item.dict() for item in request.dependencies] if request.dependencies else None
+        action_items_list = [item.dict() for item in request.action_items] if request.action_items else None
+        
+        # Generate the report
+        docx_bytes = generator.generate(
+            project_name=request.project_name,
+            report_date=request.report_date,
+            progress_data=progress_data_list,
+            tasks_completed=tasks_completed_list,
+            planned_next_week=planned_next_week_list,
+            risks_issues=risks_issues_list,
+            blockers=blockers_list,
+            milestone_status=milestone_status_list,
+            decisions_needed=decisions_needed_list,
+            dependencies=dependencies_list,
+            action_items=action_items_list
+        )
+        
+        # Return as downloadable file
+        return StreamingResponse(
+            iter([docx_bytes.getvalue()]),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": "attachment; filename=weekly_status_report.docx"}
         )
     
     except Exception as e:
