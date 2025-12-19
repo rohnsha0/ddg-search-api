@@ -234,10 +234,11 @@ async def convert_to_pdf(file: UploadFile = File(...)):
 
 
 class OpenRouterRequest(BaseModel):
-    """Request model for OpenRouter chat completions proxy"""
+    """Request model for OpenRouter chat completions proxy (single message only)"""
     model_name: str
     auth_code: str
-    messages: List[dict]
+    # Single message string (role: user)
+    message: str
     appname: Optional[str] = None
     siteaddress: Optional[str] = None
 
@@ -250,17 +251,20 @@ async def openrouter_proxy(body: OpenRouterRequest):
     Required:
     - model_name: model identifier (e.g., google/gemini-2.5-flash-image)
     - auth_code: Bearer token for Authorization header
-    - messages: list of {"role": "user|system|assistant", "content": "..."}
+    - message: single string (role 'user')
 
     Optional:
     - appname: value for X-Title header
     - siteaddress: value for Referer and HTTP-Referer headers
     """
     try:
-        if not body.messages:
-            raise HTTPException(status_code=400, detail="`messages` is required")
+        if not body.message:
+            raise HTTPException(status_code=400, detail="`message` is required")
 
-        payload: Dict[str, Any] = {"model": body.model_name, "messages": body.messages}
+        # Wrap the single message as a user message
+        messages = [{"role": "user", "content": body.message}]
+
+        payload: Dict[str, Any] = {"model": body.model_name, "messages": messages}
 
         headers = {
             "Authorization": f"Bearer {body.auth_code}",
