@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from ddgs import DDGS
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import os
+import httpx
 from validation import ValidateURLs
 from weeklyreportgenerator import WeeklyStatusReportGenerator
 import holidays
@@ -228,6 +229,66 @@ async def convert_to_pdf(file: UploadFile = File(...)):
             media_type="application/pdf"
         )
     
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class OpenRouterRequest(BaseModel):
+    """Request model for OpenRouter chat completions proxy"""
+    model_name: str
+    auth_code: str
+    messages: List[dict]
+    appname: Optional[str] = None
+    siteaddress: Optional[str] = None
+
+
+@app.post("/api/openrouter-proxy")
+async def openrouter_proxy(body: OpenRouterRequest):
+    """
+    Proxy endpoint for OpenRouter chat completions.
+
+    Required:
+    - model_name: model identifier (e.g., google/gemini-2.5-flash-image)
+    - auth_code: Bearer token for Authorization header
+    - messages: list of {"role": "user|system|assistant", "content": "..."}
+
+    Optional:
+    - appname: value for X-Title header
+    - siteaddress: value for Referer and HTTP-Referer headers
+    """
+    try:
+        if not body.messages:
+            raise HTTPException(status_code=400, detail="`messages` is required")
+
+        payload: Dict[str, Any] = {"model": body.model_name, "messages": body.messages}
+
+        headers = {
+            "Authorization": f"Bearer {body.auth_code}",
+            "Content-Type": "application/json",
+        }
+        if body.appname:
+            headers["X-Title"] = body.appname
+        if body.siteaddress:
+            # Include both Referer and HTTP-Referer for compatibility with some servers
+            headers["Referer"] = body.siteaddress
+            headers["HTTP-Referer"] = body.siteaddress
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                json=payload,
+                headers=headers,
+            )
+
+        try:
+            content = resp.json()
+        except Exception:
+            content = {"text": resp.text}
+
+        return JSONResponse(status_code=resp.status_code, content=content)
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
