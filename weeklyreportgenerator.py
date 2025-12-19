@@ -217,71 +217,89 @@ class WeeklyStatusReportGenerator:
             section.bottom_margin = Inches(0.8)
             section.left_margin = Inches(1.1)
             section.right_margin = Inches(1.1)
-        
-        # === HEADER WITH LOGOS ===
-        if client_logo_path or company_logo_path:
-            header_para = doc.add_paragraph()
-            header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            header_para.paragraph_format.space_before = Pt(6)
-            header_para.paragraph_format.space_after = Pt(12)
             
-            # Create a table with no borders for logo positioning
-            header_table = doc.add_table(rows=1, cols=3)
-            header_table.autofit = False
+            # Add page borders
+            sectPr = section._sectPr
+            pgBorders = OxmlElement('w:pgBorders')
+            pgBorders.set(qn('w:offsetFrom'), 'page')
             
-            # Remove all borders from header table
-            tbl = header_table._element
-            tblPr = tbl.tblPr
-            if tblPr is None:
-                tblPr = OxmlElement('w:tblPr')
-                tbl.insert(0, tblPr)
-            
-            # Set table to have no borders
-            tblBorders = OxmlElement('w:tblBorders')
-            for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
+            for border_name in ['top', 'left', 'bottom', 'right']:
                 border = OxmlElement(f'w:{border_name}')
-                border.set(qn('w:val'), 'none')
-                tblBorders.append(border)
-            tblPr.append(tblBorders)
+                border.set(qn('w:val'), 'single')
+                border.set(qn('w:sz'), '12')  # Border size
+                border.set(qn('w:space'), '24')  # Space from edge
+                border.set(qn('w:color'), '466482')  # Border color (matching COLOR_PRIMARY)
+                pgBorders.append(border)
             
-            # Client logo (left)
-            if client_logo_path:
-                cell_left = header_table.rows[0].cells[0]
-                cell_left.width = Inches(1.8)
-                paragraph_left = cell_left.paragraphs[0]
-                paragraph_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                shading_left = OxmlElement('w:shd')
-                shading_left.set(qn('w:fill'), 'FFFFFF')
-                cell_left._element.get_or_add_tcPr().append(shading_left)
-                try:
-                    run_left = paragraph_left.add_run()
-                    run_left.add_picture(client_logo_path, width=Inches(1.3))
-                except Exception:
-                    pass
+            sectPr.append(pgBorders)
             
-            # Center cell - empty for spacing
-            cell_center = header_table.rows[0].cells[1]
-            cell_center.width = Inches(2.4)
-            shading_center = OxmlElement('w:shd')
-            shading_center.set(qn('w:fill'), 'FFFFFF')
-            cell_center._element.get_or_add_tcPr().append(shading_center)
-            
-            # Company logo (right)
-            if company_logo_path:
-                cell_right = header_table.rows[0].cells[2]
-                cell_right.width = Inches(1.8)
-                paragraph_right = cell_right.paragraphs[0]
-                paragraph_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-                shading_right = OxmlElement('w:shd')
-                shading_right.set(qn('w:fill'), 'FFFFFF')
-                cell_right._element.get_or_add_tcPr().append(shading_right)
-                try:
-                    run_right = paragraph_right.add_run()
-                    run_right.add_picture(company_logo_path, width=Inches(1.3))
-                except Exception:
-                    pass
-            
-            doc.add_paragraph()  # Spacing
+            # === ADD HEADER WITH LOGOS TO EVERY PAGE ===
+            if client_logo_path or company_logo_path:
+                header = section.header
+                
+                header_para = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+                header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                header_para.paragraph_format.space_before = Pt(6)
+                header_para.paragraph_format.space_after = Pt(12)
+                
+                # Create a table with no borders for logo positioning
+                header_table = header.add_table(rows=1, cols=3, width=Inches(6.3))
+                header_table.autofit = False
+                
+                # Remove all borders from header table
+                tbl = header_table._element
+                tblPr = tbl.tblPr
+                if tblPr is None:
+                    tblPr = OxmlElement('w:tblPr')
+                    tbl.insert(0, tblPr)
+                
+                # Set table to have no borders
+                tblBorders = OxmlElement('w:tblBorders')
+                for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
+                    border = OxmlElement(f'w:{border_name}')
+                    border.set(qn('w:val'), 'none')
+                    tblBorders.append(border)
+                tblPr.append(tblBorders)
+                
+                # Client logo (left)
+                if client_logo_path:
+                    cell_left = header_table.rows[0].cells[0]
+                    cell_left.width = Inches(1.8)
+                    paragraph_left = cell_left.paragraphs[0]
+                    paragraph_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    shading_left = OxmlElement('w:shd')
+                    shading_left.set(qn('w:fill'), 'FFFFFF')
+                    cell_left._element.get_or_add_tcPr().append(shading_left)
+                    try:
+                        run_left = paragraph_left.add_run()
+                        run_left.add_picture(client_logo_path, width=Inches(1.3))
+                    except Exception:
+                        pass
+                
+                # Center cell - empty for spacing
+                cell_center = header_table.rows[0].cells[1]
+                cell_center.width = Inches(2.4)
+                shading_center = OxmlElement('w:shd')
+                shading_center.set(qn('w:fill'), 'FFFFFF')
+                cell_center._element.get_or_add_tcPr().append(shading_center)
+                
+                # Company logo (right)
+                if company_logo_path:
+                    cell_right = header_table.rows[0].cells[2]
+                    cell_right.width = Inches(1.8)
+                    paragraph_right = cell_right.paragraphs[0]
+                    paragraph_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                    shading_right = OxmlElement('w:shd')
+                    shading_right.set(qn('w:fill'), 'FFFFFF')
+                    cell_right._element.get_or_add_tcPr().append(shading_right)
+                    try:
+                        run_right = paragraph_right.add_run()
+                        run_right.add_picture(company_logo_path, width=Inches(1.3))
+                    except Exception:
+                        pass
+                
+                # Add spacing after header
+                header.add_paragraph()
         
         # === REPORT TITLE ===
         title = doc.add_heading('WEEKLY STATUS REPORT', level=1)
