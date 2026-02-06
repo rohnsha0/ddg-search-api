@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException, UploadFile, File
+from fastapi import FastAPI, Request, HTTPException, UploadFile, File, BackgroundTasks 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from ddgs import DDGS
@@ -202,49 +202,73 @@ def perform_pdf_conversion(file_bytes: bytes, filename: str):
     os.makedirs(output_dir, exist_ok=True)
     
     temp_file_path = os.path.join(output_dir, filename)
+
+    try:
     
-    # Blocking File Write
-    with open(temp_file_path, "wb") as buffer:
-        buffer.write(file_bytes)
+        # Blocking File Write
+        with open(temp_file_path, "wb") as buffer:
+            buffer.write(file_bytes)
+        
+        # Blocking Subprocess Call
+        result = subprocess.run([
+            'libreoffice',
+            '--headless',
+            '--convert-to', 'pdf',
+            '--outdir', output_dir,
+            temp_file_path
+        ], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            raise Exception(f"Conversion failed: {result.stderr}")
+        
+        # Determine PDF path
+        pdf_filename = os.path.splitext(filename)[0] + ".pdf"
+        pdf_path = os.path.join(output_dir, pdf_filename)
+        
+        if not os.path.exists(pdf_path):
+            raise Exception(f"PDF file not created at {pdf_path}")
+        
+        return pdf_path, pdf_filename
     
-    # Blocking Subprocess Call
-    result = subprocess.run([
-        'libreoffice',
-        '--headless',
-        '--convert-to', 'pdf',
-        '--outdir', output_dir,
-        temp_file_path
-    ], capture_output=True, text=True)
-    
-    if result.returncode != 0:
-        raise Exception(f"Conversion failed: {result.stderr}")
-    
-    # Determine PDF path
-    pdf_filename = os.path.splitext(filename)[0] + ".pdf"
-    pdf_path = os.path.join(output_dir, pdf_filename)
-    
-    if not os.path.exists(pdf_path):
-        raise Exception(f"PDF file not created at {pdf_path}")
-    
-    return pdf_path, pdf_filename
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        # DELETE THE DOCX IMMEDIATELY
+        print(temp_file_path)
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+
+def remove_file(path: str):
+    """
+    Utility function used by BackgroundTasks to delete 
+    temporary files after a response has been sent.
+    """
+    try:
+        # Check if the path actually exists to avoid FileNotFoundError
+        if os.path.exists(path):
+            os.remove(path)
+            print(f"[CLEANUP] Successfully deleted: {path}")
+        else:
+            path(f"[CLEANUP] File not found, skipping deletion: {path}")
+            
+    except PermissionError:
+        print(f"[CLEANUP] Permission denied: Could not delete {path}. File might be in use.")
+    except Exception as e:
+        print(f"[CLEANUP] Error deleting file {path}: {str(e)}")
 
 
 @app.post("/api/convert-to-pdf")
-async def convert_to_pdf(file: UploadFile = File(...)):
+async def convert_to_pdf( background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """
     Convert uploaded document (DOCX, etc.) to PDF using LibreOffice.
     Returns the PDF file as a downloadable attachment.
     """
     try:
-        # Create output folder if it doesn't exist
-        # os.makedirs("output_folder", exist_ok=True)
 
         file_bytes = await file.read()
         
-        # # Save uploaded file temporarily
-        # temp_file_path = f"output_folder/{file.filename}"
-        # with open(temp_file_path, "wb") as buffer:
-        #     buffer.write(await file.read())
 
         # 2. Use anyio to run the heavy sync logic in a background thread
         # This prevents the FastAPI event loop from freezing
@@ -253,26 +277,10 @@ async def convert_to_pdf(file: UploadFile = File(...)):
             file_bytes, 
             file.filename
         )
-        
-        # # Convert to PDF using LibreOffice
-        # result = subprocess.run([
-        #     'libreoffice',
-        #     '--headless',
-        #     '--convert-to', 'pdf',
-        #     '--outdir', 'output_folder',
-        #     temp_file_path
-        # ], capture_output=True, text=True)
-        
-        # if result.returncode != 0:
-        #     raise Exception(f"Conversion failed: {result.stderr}")
-        
-        # # Get the PDF filename
-        # pdf_filename = os.path.splitext(file.filename)[0] + ".pdf"
-        # pdf_path = f"output_folder/{pdf_filename}"
-        
-        # if not os.path.exists(pdf_path):
-        #     raise Exception(f"PDF file not created at {pdf_path}")
-        
+
+        # 2. Schedule the file for deletion AFTER the response is sent
+        background_tasks.add_task(remove_file, pdf_path)
+    
         # Return the PDF file for download
         return FileResponse(
             path=pdf_path,

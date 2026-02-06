@@ -32,6 +32,12 @@ class AsyncValidateURLs:
         self.ppscope = pp_scope
         self.max_results = max_results
         self.validated_urls = []
+        # Initialize the persistent client
+        self.http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(15.0), # Centralized timeout
+            follow_redirects=True,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10) # Connection pooling
+        )
         logger.info("[INIT] ValidateURLs initialized successfully")
         self.SYSTEMPROMPTFORQUERY = """
 You are a specialized AI agent designed to validate project insights and scope information by generating a targeted search query. Your primary objective is to verify the accuracy, completeness, and context of project information found in business intelligence data.
@@ -211,18 +217,17 @@ or
     async def getHTML(self, website: str):
         logger.info(f"[FETCH] Fetching HTML from: {website}")
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(website, timeout=10.0)
-                response.raise_for_status()
+            response = await self.http_client.get(website, timeout=10.0)
+            response.raise_for_status()
                 
-                logger.info(f"[FETCH] Successfully fetched HTML (status: {response.status_code})")
+            logger.info(f"[FETCH] Successfully fetched HTML (status: {response.status_code})")
                 
-                # Convert to markdown as currently implemented
-                # context = md(response.text)
-                context = context = trafilatura.extract(response.text) or ""
-                logger.debug(f"[FETCH] HTML length: {len(response.text)}, Markdown length: {len(context)}")
+            # Convert to markdown as currently implemented
+            # context = md(response.text)
+            context = context = trafilatura.extract(response.text) or ""
+            logger.debug(f"[FETCH] HTML length: {len(response.text)}, Markdown length: {len(context)}")
                 
-                return {"content": context, "response_code": response.status_code}
+            return {"content": context, "response_code": response.status_code}
                 
         except httpx.HTTPStatusError as e:
             logger.error(f"[FETCH] HTTP error: {e.response.status_code} for {website}")
