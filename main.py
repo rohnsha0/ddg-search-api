@@ -27,6 +27,8 @@ app.add_middleware(
         "http://127.0.0.1:8000",
         "https://n8n.thelinkai.com",
         "http://69.62.82.163:8000",
+        "https://jeanne-palaeoecological-contendingly.ngrok-free.dev",
+        "https://jeanne-palaeoecological-contendingly.ngrok-free.dev"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -49,6 +51,7 @@ async def verify_origin(request: Request, call_next):
         "http://127.0.0.1:8000",
         "https://n8n.thelinkai.com",
         "http://69.62.82.163:8000",
+        "https://jeanne-palaeoecological-contendingly.ngrok-free.dev"
     ]
 
     # Allow requests without origin/referer for direct API access (like Postman during development)

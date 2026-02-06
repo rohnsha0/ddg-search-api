@@ -6,13 +6,23 @@ import httpx
 import asyncio
 from markdownify import markdownify as md
 import trafilatura
+import logging
+import anyio
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 
 class AsyncValidateURLs:
     def __init__(
         self, access_token: str, insight: str, pp_scope: str, max_results: int
     ):
-        print("[INIT] Initializing ValidateURLs class...")
+        logger.info("[INIT] Initializing ValidateURLs class...")
         self.access = access_token
         self.client = AsyncOpenAI(
             api_key=access_token,
@@ -22,7 +32,7 @@ class AsyncValidateURLs:
         self.ppscope = pp_scope
         self.max_results = max_results
         self.validated_urls = []
-        print("[INIT] ValidateURLs initialized successfully")
+        logger.info("[INIT] ValidateURLs initialized successfully")
         self.SYSTEMPROMPTFORQUERY = """
 You are a specialized AI agent designed to validate project insights and scope information by generating a targeted search query. Your primary objective is to verify the accuracy, completeness, and context of project information found in business intelligence data.
 
@@ -199,35 +209,34 @@ or
 """
 
     async def getHTML(self, website: str):
-        print(f"[FETCH] Fetching HTML from: {website}")
+        logger.info(f"[FETCH] Fetching HTML from: {website}")
         try:
-            # Use AsyncClient for asynchronous requests
             async with httpx.AsyncClient() as client:
                 response = await client.get(website, timeout=10.0)
                 response.raise_for_status()
                 
-                print(f"[FETCH] Successfully fetched HTML (status: {response.status_code})")
-                # Extract main text only to save tokens
-                context = trafilatura.extract(response.text) or ""
+                logger.info(f"[FETCH] Successfully fetched HTML (status: {response.status_code})")
                 
-                # Convert to markdown
-                # context = md(context)
-
-                # # print(md(testexample))
+                # Convert to markdown as currently implemented
+                # context = md(response.text)
+                context = context = trafilatura.extract(response.text) or ""
+                logger.debug(f"[FETCH] HTML length: {len(response.text)}, Markdown length: {len(context)}")
+                
                 return {"content": context, "response_code": response.status_code}
                 
         except httpx.HTTPStatusError as e:
-            # Specifically handles 4xx or 5xx errors from raise_for_status()
-            print(f"[FETCH] HTTP error: {e.response.status_code}")
+            logger.error(f"[FETCH] HTTP error: {e.response.status_code} for {website}")
             return {"content": "", "response_code": e.response.status_code}
-        except httpx.RequestException as e:
-            # Handles timeouts, connection errors, etc.
-            print(f"[FETCH] Network error: {str(e)}")
+        except httpx.RequestError as e:
+            logger.error(f"[FETCH] Network error: {str(e)} for {website}")
+            return {"content": "", "response_code": 500}
+        except Exception as e:
+            logger.critical(f"[CRITICAL] Unexpected error fetching {website}: {str(e)}")
             return {"content": "", "response_code": 500}
 
 
     async def generateSearchQueries(self, previousqueries: Optional[List[str]] = None):
-        print("[QUERY-GEN] Generating search queries...")
+        logger.info("[QUERY-GEN] Generating search queries...")
         # If list is empty, say "None"
         formatted_previous = "None"
         if previousqueries:
@@ -255,17 +264,18 @@ or
 
 
     async def search_links(self, query: str, max_results: int, timelimit: str = "y"):
-        print(
+        logger.info(
             f"[SEARCH] Searching for query: '{query}' (max_results={max_results}, timelimit={timelimit})"
         )
         try:
-            results = DDGS().text(
+            # Modern approach using anyio extension
+            results = await anyio.to_thread.run_sync(lambda: DDGS().text(
                 query,
                 region="wt-wt",
                 safesearch="off",
                 timelimit=timelimit,
                 max_results=max_results,
-            )
+            ))
 
             # Extract only the hrefs and filter out wikipedia.com
             links = [
@@ -273,7 +283,7 @@ or
                 for result in results
                 if "wikipedia.com" not in result["href"]
             ]
-            print(f"[SEARCH] Links: {links}")
+            logger.info(f"[SEARCH] Found {len(links)} relevant links")
 
             return {
                 "success": True,
@@ -282,13 +292,12 @@ or
                 "links": links,
             }
         except Exception as e:
-            print(f"[SEARCH] Error during search: {str(e)}")
+            logger.error(f"[SEARCH] Error during search: {str(e)}")
             return {"errored": str(e)}
 
 
     async def validateHTML(self, content: str):
-        print("[VALIDATE] Validating HTML content...")
-        print(f"[VALIDATE] HTML content length: {len(content)} characters")
+        logger.info(f"[VALIDATE] Validating content (length: {len(content)})")
 
         response = await self.client.chat.completions.create(
             model="mistralai/ministral-8b",
@@ -299,7 +308,7 @@ or
                     "content": f"""
                         Insight Summary: {self.insght}
                         Project Scope: {self.ppscope}
-                        HTML Content: {content}
+                        Markdown Content: {content}
 """,
                 },
             ],
@@ -307,28 +316,26 @@ or
         )
 
         json_response = json.loads(response.choices[0].message.content)
-
-        print("[VALIDATE] HTML validation response:", json_response)
+        logger.info(f"[VALIDATE] Match result: {json_response.get('matches')}")
         return json_response
 
 
     async def validate_single_url(self, idx, url, semaphore):
         """Helper function to process a single URL."""
         
-        # 1. Check BEFORE entering the semaphore (don't even wait in line if we are done)
+        #  1. Check BEFORE starting
         if len(self.validated_urls) >= self.max_results:
+            logger.debug(f"[VALIDATE] Skipping URL (Target reached): {url}")
             return None
 
-        print(
-            f"[VALIDATE] Processing URL {idx}: {url}"
-        )
+        logger.info(f"[VALIDATE] Processing URL {idx}: {url}")
 
         async with semaphore:
             # 2. Check AGAIN after entering (in case 3 other tasks finished while we waited)
             if len(self.validated_urls) >= self.max_results:
                 return None
 
-            print(f"[VALIDATE] Fetching: {url}")
+            logger.info(f"[VALIDATE] URL {idx} Fetching starting: {url}")
             html_content = await self.getHTML(website=url)
             
             if html_content.get("response_code") == 200:
@@ -336,38 +343,39 @@ or
                     validation_result = await self.validateHTML(
                         content=html_content.get("content")
                     )
-                    
                     if validation_result.get("matches", False):
-                        # 3. Add to the shared list immediately
-                        # This is what signals the OTHER tasks to stop
                         self.validated_urls.append(url)
-                        print(f"[VALIDATE] Match found ({len(self.validated_urls)}/{self.max_results}): {url}")
+                        logger.info(f"[VALIDATE] Match found ({len(self.validated_urls)}/{self.max_results}): {url}")
                         return url
+                    else:
+                        logger.info(f"[VALIDATE] URL {idx} -- match is False")
                         
                 except Exception as e:
-                    print(f"[VALIDATE] Error validating {url}: {e}")
+                    logger.error(f"[VALIDATE] Error validating {url}: {e}")
+            else:
+                logger.info(f"[VALIDATE] URL {idx} -- no content found (status {html_content.get('response_code')})")
             
             return None
 
 
 
     async def validate(self, max_retries: int = 3):
-        print(f"[VALIDATE] Starting validation process with max_retries={max_retries}")
+        logger.info(f"[VALIDATE] Starting validation process with max_retries={max_retries}")
         searchqueries = []
         seen_urls = set()  # Track all URLs we've already seen across retries
 
         retry_count = 0
 
         while retry_count < max_retries:
-            print(f"\n[VALIDATE] ===== Retry {retry_count + 1}/{max_retries} =====")
+            logger.info(f"===== Retry {retry_count + 1}/{max_retries} =====")
 
             # Increase max_results for DDG search with each retry
             # Start with 50, then 75, then 100, etc.
             current_search_limit = 50 + (retry_count * 25)
-            print(f"[VALIDATE] Current DDG search limit: {current_search_limit}")
+            logger.info(f"[VALIDATE] Search limit: {current_search_limit}")
 
             queries = [await self.generateSearchQueries(previousqueries = searchqueries)]
-            print(f"[VALIDATE] Processing Query: {queries}")
+            logger.info(f"[VALIDATE] Queries generated: {queries}")
             searchqueries += queries
 
             for idx, query in enumerate(queries, 1):
@@ -377,7 +385,7 @@ or
                     )
                     break
 
-                print(f"\n[VALIDATE] Processing query {idx}/{len(queries)}: '{query}'")
+                logger.info(f"[VALIDATE] Executing query: '{query}'")
                 unvalidated_urls = await self.search_links(
                     query=query, max_results=current_search_limit
                 )
@@ -397,44 +405,6 @@ or
 
                     print(f"[VALIDATE] Validating {len(new_links)} new URLs...")
 
-                    # for url_idx, url in enumerate(new_links, 1):
-                    #     if len(validated_urls) >= self.max_results:
-                    #         print(
-                    #             f"[VALIDATE] Reached target of {self.max_results} validated URLs, stopping validation"
-                    #         )
-                    #         break
-
-                    #     print(
-                    #         f"[VALIDATE] Processing URL {url_idx}/{len(new_links)}: {url}"
-                    #     )
-                    #     html_content = await self.getHTML(website=url)
-                    #     if html_content.get("response_code") == 200:
-                    #         try:
-                    #             validation_result = await self.validateHTML(
-                    #                 content=html_content.get("content")
-                    #             )
-                    #             matches = validation_result.get("matches", False)
-
-                    #             # Collect all URLs that match
-                    #             if matches:
-                    #                 print(
-                    #                     "[VALIDATE] URL validated successfully - content matches"
-                    #                 )
-                    #                 validated_urls.append(url)
-                    #             else:
-                    #                 print(
-                    #                     "[VALIDATE] URL does not match - content does not align"
-                    #                 )
-                    #         except Exception as e:
-                    #             print(
-                    #                 f"[VALIDATE] Error during validation of URL: {str(e)}"
-                    #             )
-                    #             continue
-                    #     else:
-                    #         print(
-                    #             f"[VALIDATE] Skipping URL due to non-200 response code: {html_content.get('response_code')}"
-                    #         )
-
                     sem = asyncio.Semaphore(5)
 
                     # Create tasks
@@ -444,35 +414,25 @@ or
                     
                     # Run in parallel
                     await asyncio.gather(*tasks)
-
-                    # By the time gather is done, self.validated_urls is already populated
-                    print(f"[VALIDATE] Completed. Total found: {len(self.validated_urls)}")
+                    logger.info(f"[VALIDATE] Search results processed. Matches found: {len(self.validated_urls)}")
                     
                 else:
-                    print(
-                        f"[VALIDATE] Search failed with error: {unvalidated_urls.get('errored', 'Unknown error')}"
-                    )
+                    logger.error(f"[VALIDATE] Search failed: {unvalidated_urls.get('errored', 'Unknown error')}")
 
             # Check if we have enough validated URLs
             if len(self.validated_urls) >= self.max_results:
-                print(
-                    f"[VALIDATE] Successfully found {self.max_results} validated URLs"
-                )
+                logger.info(f"[VALIDATE] Found target {self.max_results} URLs")
                 break
             elif len(self.validated_urls) > 0:
-                print(
-                    f"[VALIDATE] Found {len(self.validated_urls)} validated URLs, stopping retries"
-                )
+                logger.info(f"[VALIDATE] Found {len(self.validated_urls)} URLs, stopping retries")
                 break
             else:
-                print(
-                    f"[VALIDATE] No validated URLs found yet ({len(self.validated_urls)}/{self.max_results})"
-                )
+                logger.warn(f"[VALIDATE] No URLs found ({len(self.validated_urls)}/{self.max_results})")
                 retry_count += 1
                 if retry_count < max_retries:
-                    print("[VALIDATE] Will retry with increased search limit...")
+                    logger.info("[VALIDATE] Will retry with increased search limit...")
                 else:
-                    print("[VALIDATE] Max retries reached, stopping")   
+                    logger.info("[VALIDATE] Max retries reached, stopping")
 
         # Keep only the first self.max_results validated URLs
         if len(self.validated_urls) > self.max_results:
