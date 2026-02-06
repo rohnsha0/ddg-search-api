@@ -6,11 +6,12 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import os
 import httpx
-from validation import ValidateURLs
+from validation import AsyncValidateURLs
 from weeklyreportgenerator import WeeklyStatusReportGenerator
 import holidays
 from datetime import datetime, timedelta
 import subprocess
+import anyio # Make sure to install anyio
 
 app = FastAPI(
     title="Lead Management API",
@@ -172,20 +173,57 @@ async def validate_api(
     access_token: str,
     original_url: Optional[str] = None,
 ):
-    validator = ValidateURLs(
+    validator = AsyncValidateURLs(
         access_token=access_token,
         insight=summary,
         pp_scope=pp_scope,
         max_results=max_results,
     )
 
-    validated_urls = validator.validate()
+    validated_urls = await validator.validate()
 
     # Remove original_url from the list if it's present and not None
     if original_url is not None and original_url in validated_urls:
         validated_urls.remove(original_url)
 
     return {"validated_urls": validated_urls, "validation_score": len(validated_urls)}
+
+
+# 1. Define a helper function for the blocking operations
+def perform_pdf_conversion(file_bytes: bytes, filename: str):
+    """
+    This function contains all the blocking I/O and CPU-heavy tasks.
+    It will be run in a separate thread.
+    """
+    output_dir = "output_folder"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    temp_file_path = os.path.join(output_dir, filename)
+    
+    # Blocking File Write
+    with open(temp_file_path, "wb") as buffer:
+        buffer.write(file_bytes)
+    
+    # Blocking Subprocess Call
+    result = subprocess.run([
+        'libreoffice',
+        '--headless',
+        '--convert-to', 'pdf',
+        '--outdir', output_dir,
+        temp_file_path
+    ], capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        raise Exception(f"Conversion failed: {result.stderr}")
+    
+    # Determine PDF path
+    pdf_filename = os.path.splitext(filename)[0] + ".pdf"
+    pdf_path = os.path.join(output_dir, pdf_filename)
+    
+    if not os.path.exists(pdf_path):
+        raise Exception(f"PDF file not created at {pdf_path}")
+    
+    return pdf_path, pdf_filename
 
 
 @app.post("/api/convert-to-pdf")
@@ -196,31 +234,41 @@ async def convert_to_pdf(file: UploadFile = File(...)):
     """
     try:
         # Create output folder if it doesn't exist
-        os.makedirs("output_folder", exist_ok=True)
+        # os.makedirs("output_folder", exist_ok=True)
+
+        file_bytes = await file.read()
         
-        # Save uploaded file temporarily
-        temp_file_path = f"output_folder/{file.filename}"
-        with open(temp_file_path, "wb") as buffer:
-            buffer.write(await file.read())
+        # # Save uploaded file temporarily
+        # temp_file_path = f"output_folder/{file.filename}"
+        # with open(temp_file_path, "wb") as buffer:
+        #     buffer.write(await file.read())
+
+        # 2. Use anyio to run the heavy sync logic in a background thread
+        # This prevents the FastAPI event loop from freezing
+        pdf_path, pdf_filename = await anyio.to_thread.run_sync(
+            perform_pdf_conversion, 
+            file_bytes, 
+            file.filename
+        )
         
-        # Convert to PDF using LibreOffice
-        result = subprocess.run([
-            'libreoffice',
-            '--headless',
-            '--convert-to', 'pdf',
-            '--outdir', 'output_folder',
-            temp_file_path
-        ], capture_output=True, text=True)
+        # # Convert to PDF using LibreOffice
+        # result = subprocess.run([
+        #     'libreoffice',
+        #     '--headless',
+        #     '--convert-to', 'pdf',
+        #     '--outdir', 'output_folder',
+        #     temp_file_path
+        # ], capture_output=True, text=True)
         
-        if result.returncode != 0:
-            raise Exception(f"Conversion failed: {result.stderr}")
+        # if result.returncode != 0:
+        #     raise Exception(f"Conversion failed: {result.stderr}")
         
-        # Get the PDF filename
-        pdf_filename = os.path.splitext(file.filename)[0] + ".pdf"
-        pdf_path = f"output_folder/{pdf_filename}"
+        # # Get the PDF filename
+        # pdf_filename = os.path.splitext(file.filename)[0] + ".pdf"
+        # pdf_path = f"output_folder/{pdf_filename}"
         
-        if not os.path.exists(pdf_path):
-            raise Exception(f"PDF file not created at {pdf_path}")
+        # if not os.path.exists(pdf_path):
+        #     raise Exception(f"PDF file not created at {pdf_path}")
         
         # Return the PDF file for download
         return FileResponse(
