@@ -248,7 +248,7 @@ or
             formatted_previous = "\n".join([f"- {q}" for q in previousqueries])
 
         response = await self.client.chat.completions.create(
-            model="ibm-granite/granite-4.1-8b",
+            model="ibm-granite/granite-4.1-8b", #$0.05/M input tokens  #$0.10/M output tokens
             # model="openai/gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": self.SYSTEMPROMPTFORQUERY},
@@ -306,7 +306,7 @@ or
         logger.info(f"[VALIDATE] Validating content (length: {len(content)})")
 
         response = await self.client.chat.completions.create(
-            model="qwen/qwen3.5-flash-02-23",
+            model="qwen/qwen3.5-flash-02-23", # $0.065/M input tokens  # $0.26/M output tokens
             # model="mistralai/ministral-8b",
             messages=[
                 {"role": "system", "content": self.SYSTEMPROMPTVALIDATOR},
